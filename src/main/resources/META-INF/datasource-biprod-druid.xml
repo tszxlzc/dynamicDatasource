@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	   xmlns:tx="http://www.springframework.org/schema/tx"
+	   xmlns:aop="http://www.springframework.org/schema/aop"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+	http://www.springframework.org/schema/tx
+	http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+	http://www.springframework.org/schema/aop
+	http://www.springframework.org/schema/aop/spring-aop-3.0.xsd">
+
+	<bean name="parentDataSource" abstract="true" class="com.alibaba.druid.pool.DruidDataSource">
+		<property name="initialSize" value="${initialSize}" />	<!-- 初始化时建立物理连接的个数。初始化发生在显示调用init方法，或者第一次getConnection时 -->
+		<property name="maxActive" value="${maxActive}" />	<!-- 最大连接池数量 -->
+		<property name="minIdle" value="${minIdle}" /> <!-- 最小连接池数量 -->
+		<!-- <property name="maxIdle" value="${jdbc.maxIdlePollSize}" /> --> <!-- 已废弃 -->
+		<property name="maxWait" value="${maxWait}" /> <!-- 获取连接等待超时的时间。单位毫秒。 -->
+		<property name="useUnfairLock" value="true" /> <!-- 获取连接时是否使用非公平锁。使用非公平锁并非效率比较高。 -->
+		<property name="connectionProperties" value="config.decrypt=true" />
+		<property name="filters" value="config" />
+
+		<!-- 1) Destroy线程会检测连接的间隔时间，2) testWhileIdle的判断依据 -->
+		<property name="timeBetweenEvictionRunsMillis" value="${timeBetweenEvictionRunsMillis}" />
+		<!-- Destory线程如果检测到当前连接的最后活跃时间和当前时间的差值大于minEvictableIdleTimeMillis，则会关闭当前连接 。单位毫秒。 -->
+		<property name="minEvictableIdleTimeMillis" value="${minEvictableIdleTimeMillis}" />
+		<!-- 用来检测连接是否有效的sql，要求是一个查询语句。如果为 null， testOnBorrow，testOnReturn，testWhileIdle都将无效。 -->
+		<property name="validationQuery" value="${validationQuery}" />
+		<!-- 影响性能。申请连接时，执行validationQuery检测连接是否有效。 -->
+		<property name="testOnBorrow" value="${testOnBorrow}" />
+		<!-- 影响性能。归还连接时，执行validationQuery检测连接是否有效。 -->
+		<property name="testOnReturn" value="${testOnReturn}" />
+		<!-- 不影响性能，并且保证安全性。连接空闲时，执行validationQuery（如果空闲时间大于timeBetweenEvictionRunsMillis）检测连接是否有效。 -->
+		<property name="testWhileIdle" value="${testWhileIdle}" />
+		<!-- 是否缓存preparedStatement，也就是PSCache。MySQL5.5及以上版本有PSCache，建议开启。 -->
+		<property name="poolPreparedStatements" value="${poolPreparedStatements}" />
+		<property name="maxOpenPreparedStatements" value="${maxOpenPreparedStatements}" />
+		<property name="maxPoolPreparedStatementPerConnectionSize" value="${maxPoolPreparedStatementPerConnectionSize}"/>
+		<!-- 是否强制关闭已经存活了removeAbandonedTimeout时长的连接。 -->
+		<property name="removeAbandoned" value="${removeAbandoned}" />
+		<!-- removeAbandoned=true时有效。指定连接建立多长时间就需要被强制关闭。单位毫秒。 -->
+		<property name="removeAbandonedTimeout" value="${removeAbandonedTimeout}" />
+		<!-- removeAbandoned=true时有效。将强制关闭连接的动作记录到日志。单位毫秒。 -->
+		<property name="logAbandoned" value="${logAbandoned}" />
+	</bean>
+
+	<!-- BI配置管理库数据源 -->
+	<bean id="dataSource1" class="com.alibaba.druid.pool.DruidDataSource" parent="parentDataSource" init-method="init" destroy-method="close">
+		<property name="driverClassName" value="${manager.driverClassName}" />
+		<property name="url" value="${manager.url}" />
+		<property name="username" value="${manager.username}" />
+		<property name="password" value="${manager.password}" />
+    </bean>
+
+	<!-- BI报表库数据源 -->
+	<bean id="dataSource2" class="com.alibaba.druid.pool.DruidDataSource" parent="parentDataSource" init-method="init" destroy-method="close">
+		<property name="driverClassName" value="${rpt.driverClassName}" />
+		<property name="url" value="${rpt.url}" />
+		<property name="username" value="${rpt.username}" />
+		<property name="password" value="${rpt.password}" />
+	</bean>
+
+	<!-- 多数据源配置 -->
+	<bean id="dynamicDataSource" class="liuzc.dynamicDatasource.util.dynamicDatasource.DynamicDataSource">
+		<property name="defaultTargetDataSource" ref="dataSource1"/>
+		<property name="targetDataSources">
+			<map key-type="java.lang.String">
+				<entry key="managerDataSource" value-ref="dataSource1"/>
+				<entry key="rptDataSource" value-ref="dataSource2"/>
+			</map>
+		</property>
+	</bean>
+
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dynamicDataSource" />
+	</bean>
+	
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dynamicDataSource" />
+		<property name="mapperLocations" value="classpath*:META-INF/mapper/*Mapper.xml" />
+	</bean>
+
+	<bean id="serviceTemplate" class="la.kaike.platform.common.service.template.impl.ServiceTemplateImpl" >
+		<property name="transactionTemplate">
+			<bean id="transactionTemplate"
+				  class="org.springframework.transaction.support.TransactionTemplate">
+				<property name="transactionManager" ref="transactionManager" />
+			</bean>
+		</property>
+	</bean>
+
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="liuzc.dynamicDatasource.dal.mapper" />
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+	</bean>
+	
+	<tx:annotation-driven transaction-manager="transactionManager" />
+</beans>

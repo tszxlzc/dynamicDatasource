@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="liuzc.dynamicDatasource.dal.mapper.DataSourceMapper">
+
+    <resultMap id="dataSourceDTO" type="liuzc.dynamicDatasource.service.dto.DataSourceDTO">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="uuid_key" property="uuidKey"/>
+        <result column="description" property="description"/>
+        <result column="type" property="type"/>
+        <result column="url" property="url"/>
+        <result column="driver_class_name" property="driverClassName"/>
+        <result column="user_name" property="userName"/>
+        <result column="user_pwd" property="userPwd"/>
+        <result column="creator" property="creator"/>
+        <result column="create_time" property="createTime"/>
+        <result column="updator" property="updator"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- 获取数据库配置的数据源列表 -->
+    <select id="getDataSourceList" resultMap="dataSourceDTO">
+        SELECT a.* FROM data_source a WHERE a.deleted = 0
+        <if test="pageIndex != null and pageSize != null and pageSize > 0"> LIMIT #{pageIndex}, #{pageSize} </if>
+    </select>
+
+    <!-- 获取数据源总记录数 -->
+    <select id="getDataSourceCount" resultType="integer">
+        SELECT count(*) FROM data_source WHERE deleted = 0
+    </select>
+</mapper>
